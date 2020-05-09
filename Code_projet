@@ -1,0 +1,219 @@
+# --- Simulation d'une marche aleatoire dans F
+rwalk_f <- function(N) {
+  y <- rbinom(N, 1, 1 / 2)
+  return(c(0, cumsum(2 * y - 1)))
+}
+
+N <- 100
+plot(0:N, rwalk_f(N), 
+     type = "l", xlab = "temps entre 0 et N ", 
+     ylab = "", main = "MAS en temps N", panel.first = grid())
+abline(h = 0, col = "tomato3")
+
+
+# --- Simulation d'une trajectoire dans E par la methode du rejet
+rwalk_e_rejet <- function(N) {
+  u <- rbinom(N, 1, 1 / 2)
+  index <- 1 # Compteur du nombre de tirages suivant une loi binomiale.
+  while (sum(u) != (N / 2)) {
+    u <- rbinom(N, 1, 1 / 2)
+    index <- index + 1
+  }
+  # Conversion compteur n pour le nombre de fois qu'on tire une Bernoulli.
+  return(list(x = c(0, cumsum(2 * u - 1)), cost = index))
+}
+
+rw_1 <- rwalk_e_rejet(N)
+print(rw_1$cost)
+
+plot(0:N, rw_1$x, 
+     type = "l", xlab = "temps entre 0 et N ", 
+     ylab = "", main = "MAS en temps N", panel.first = grid())
+abline(h = 0, col = "tomato3")
+
+
+
+# --- Evaluation du temps moyen d'acceptation
+multi_rwalk_e_rejet <- function(N, n_rep = 1000) {
+  # --- Simulation n_rep trajectoires de longueur N dans E
+  cost <- numeric(n_rep)
+  x <- matrix(0, n_rep, N + 1)
+  for(i in seq_len(n_rep)) {
+    temp <- rwalk_e_rejet(N)
+    cost[i] <- temp$cost
+    x[i, ] <- temp$x
+  }
+  return(data.frame(cost = cost, x = x))
+}
+
+compute_mean_time <- function(i, data) {
+  # --- Calcul du temps moyen d'acceptation pour le i-eme replicat
+  # --- d'une experience ou N varie
+  return(mean(data[[i]]$cost))
+}
+
+compute_var_time <- function(i, data){
+  return(var(data[[i]]$cost))
+}
+
+# ------ Pour une valeur de N donnee
+N <- 1000
+data <- multi_rwalk_e_rejet(N, 1000)
+print(mean(data$cost))
+log(mean_t) / log(N)
+
+
+# partie 2.3 obtention du tableau du corollaire 1
+
+estim <- function(N, level = 0.95){
+  #On crée une fonction qui calcule l'estimateur de Monte Carlo pour toutes les valeurs de N 
+  data <- multi_rwalk_e_rejet(N, 1000)
+  delta <- mean(data$cost)
+  var <- var(data$cost)/length(data$cost)
+  return(c(delta_chap = delta, borne_inf = delta - qnorm((1+level)/2)*sqrt(var), borne_sup = delta + qnorm((1+level)/2)*sqrt(var), pre = qnorm((1+level)/2)*sqrt(var))) 
+}
+
+gprime <- function(x,N){
+  #On implémente la fonction gprime qui a pour paramètre N
+  return(1/(log(N)*x))
+}
+
+#obtention du tableau du corollaire 2
+estim.delta <- function(N, level = 0.95){
+  #On crée une fonction qu'on réutilise pour toutes les valeurs de N 
+  data <- multi_rwalk_e_rejet(N, 1000)
+  delta <- mean(data$cost)
+  g.delta <- log(mean(data$cost))/log(N)
+  var <- var(data$cost)/length(data$cost)
+  return(c(delta_chap = g.delta, borne_inf = g.delta - qnorm((1+level)/2)*sqrt(var)*gprime(delta,N), borne_sup = g.delta + qnorm((1+level)/2)*sqrt(var)*gprime(delta, N), pre = qnorm((1+level)/2)*sqrt(var)*gprime(delta,N))) 
+}
+
+esp.theorique <- function(N){
+  esp <- 2^N/choose(N,N/2)
+  return(log(esp)/log(N))
+}
+ent <- c(100,1000)
+print(esp.theorique(ent))
+
+#print(estim.delta(5000))
+
+# ------ Pour plusieurs valeurs de N
+N <- seq(10, 1000, 50)
+data <- sapply(N, multi_rwalk_e_rejet)
+(mean_t <- sapply(1:length(N), compute_mean_time, data))
+(var_t <- sapply(1:length(N), compute_var_time, data))
+
+level = 0.95
+plot(N, log(mean_t) / log(N), 
+     xlab = "N", ylab = "log(E(Tn))/log(N)", 
+     panel.first = grid(), ylim=c(0.4,0.7), main = "Evolution du rapport ln(delta_1000)/ln(N)")
+lines(N, log(mean_t) / log(N) - qnorm((1 + level)/2)*sqrt(var_t)*gprime(mean_t,N)/sqrt(N), col ="blue")
+lines(N, log(mean_t)/log(N)+ qnorm((1 + level)/2)*sqrt(var_t)*gprime(mean_t,N)/sqrt(N), lty = 2, col= "blue")
+lines(N, esp.theorique(N), type ="l", col= "firebrick")
+legend(500,0.70, legend=c("valeur théorique", "borne inf", "borne sup"),
+       col=c("firebrick","blue", "blue"), lty=1:2, cex=0.8)
+
+
+# --- Dynamique corner flip
+cornerflip <- function(x, k, up) {
+  # 0 si on veut retourner le coin vers le bas 
+  # 1 si on veut retourner le coin vers le haut
+  n <- length(x)
+  labels_coin <- c(0, (x[3:n] == x[1:(n - 2)]), 0)
+  if ((labels_coin[k] == 1) && (x[k - 1] + 1 == x[k]) && (up == 0)) {
+    x[k] <- x[k] - 2
+  }
+  if ((labels_coin[k] == 1) && (x[k - 1] - 1 == x[k]) && (up == 1)) {
+    x[k] <- x[k] + 2
+  }
+  return(x)
+}
+
+x <- c((0:5), (4:0))
+plot(0:10, x, type = "l", main ="Utilisation de la fonction f_d", panel.first = grid(), xlab = "temps entre 0 et N")
+x <- cornerflip(x, 6, 0)
+lines(0:10, x, col = "blue", lty = 2)
+legend(0, 5 , legend=c("x", "f_{d}(x,5)"),
+       col=c("black", "blue"), lty=1:2, cex=0.8)
+
+simu_cornerflip <- function(N) {
+  e <- N / 2
+  x_up <- c(0:e, (e - 1):0)
+  x_down <- c(0:(-e), (-e + 1):0)
+  ans_up <- x_up
+  ans_down <- x_down
+  t_coal <- 0
+  # t_coal est la variable qui va repr?senter le temps de coalescence
+  while (all.equal(x_up, x_down) != TRUE) {
+    t_coal <- t_coal + 1
+    k <- sample(2:N, 1)
+    val <- rbinom(1, 1, 1 / 2)
+    plot(x_up, col = "tomato3", type = "l", lty = 2, ylim = c(-N/2, N/2))
+    lines(x_down, col = "mediumseagreen", lty = 2)
+    x_up <- cornerflip(x_up, k, val)
+    x_down <- cornerflip(x_down, k, val)
+    ans_up <- rbind(ans_up, x_up)
+    ans_down <- rbind(ans_down, x_down)
+    lines(x_up, col = "tomato3", type = "l")
+    lines(x_down, col = "mediumseagreen")
+    abline(v = k)
+    #f(val == 0){
+    #  cat("bas \n")
+    #} else {
+    #  cat("haut \n")
+    #}
+    
+  }
+  return(list(t_coal = t_coal, x_down = ans_down, x_up = ans_up))
+}
+print(simu_cornerflip(10)$t_coal)
+
+
+#simu.cornerbis est une version simplifiée de la fonction simu_cornerflip, qu'on utilise pour obtenir
+# le tableau qui fait suite à la proposition 11
+simu.cornerbis <- function(n){
+  e <- n/2
+  x.0 <- c((0 :e),((e - 1) : 0))
+  x.1 <- c((0 : -e),((- e + 1) :0))
+  t.coal <- 0
+  # t.coal est la variable qui va représenter le temps de coalescence
+  while(all.equal(x.0,x.1)!=TRUE){
+    t.coal <- t.coal + 1
+    k <- sample((2:n),1)
+    # on sélectionne un site entre 2 et N, car il ne peut pas y avoir de coins qu'entre 1 et N-1
+    val<-rbinom(1,1,1/2)
+    x.0 <- cornerflip(x.0,k,val)
+    x.1 <- cornerflip(x.1,k,val)
+  }
+  return(t.coal)
+}
+
+# Procédure bootstrap 
+
+# n = 100 et B = 1000
+# On utilise la fonction lapply pour garantir qu'on parte d'une nouvelle graine aléatoire
+bootstrap.quantile <- function(N ,n ,B ,level){
+  u <- numeric(n) + N 
+  sol <- as.numeric(lapply(u,simu.cornerbis))
+  # On utilise la fonction lapply pour garantir qu'on parte d'une nouvelle graine aléatoire
+  # On utilise as.numeric pour obtenir un vecteur numérique, ce qui permet à R de calculer les quantiles empiriques 
+  V <- numeric(B)
+  epsilon <- 1/4 
+  for (i in (1:B)){
+    #On utilise une boucle car le coût de calcul de la fonction est largement dominé par l'utilisation 
+    # la fonction simu.cornerbis
+    V[i] <- quantile(sample(sol, n, replace = T), 1 - epsilon)
+  }
+  return(c(Vbar = mean(V), borne_inf = quantile(V, (1 - level)/2), borne_sup =quantile(V, (1 + level)/2)))
+}
+
+print(bootstrap.quantile(6,10,100,0.95))
+
+# Comparaison avec la borne théorique du temps de mélange (obtenue dans la section 3.2)
+
+t.mix.theorique <- function(N){
+  a <- N^2/(2*sin(pi/N))
+  b <- 2*N^3/pi*pi
+  return(floor(log(a)*b)+ 1)
+}
+print(t.mix.theorique(30))
