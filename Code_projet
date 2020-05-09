@@ -191,7 +191,6 @@ simu.cornerbis <- function(n){
 # Procédure bootstrap 
 
 # n = 100 et B = 1000
-# On utilise la fonction lapply pour garantir qu'on parte d'une nouvelle graine aléatoire
 bootstrap.quantile <- function(N ,n ,B ,level){
   u <- numeric(n) + N 
   sol <- as.numeric(lapply(u,simu.cornerbis))
